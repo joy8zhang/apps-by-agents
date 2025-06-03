@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Boxing Interval Timer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      transition: background-color 0.5s;
+    }
+    .container {
+      text-align: center;
+      padding: 20px;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 10px;
+      background-color: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .settings label {
+      display: block;
+      margin: 10px 0;
+      font-size: 0.9rem;
+    }
+    .settings input {
+      width: 60px;
+      margin-left: 5px;
+    }
+    .display {
+      margin: 20px 0;
+    }
+    #timer {
+      font-size: 4rem;
+      font-weight: bold;
+    }
+    #round-info {
+      font-size: 1.2rem;
+      margin-top: 10px;
+    }
+    .controls button {
+      margin: 5px;
+      padding: 10px 20px;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Boxing Interval Timer</h1>
+    <div class="settings">
+      <label>Round Duration (min):
+        <input type="number" id="round-duration" min="0" value="3" />
+      </label>
+      <label>Rest Duration (min):
+        <input type="number" id="rest-duration" min="0" value="1" />
+      </label>
+      <label>Rounds:
+        <input type="number" id="rounds" min="1" value="3" />
+      </label>
+    </div>
+    <div class="display">
+      <div id="timer">03:00</div>
+      <div id="round-info">Ready</div>
+    </div>
+    <div class="controls">
+      <button id="start-btn">Start</button>
+      <button id="stop-btn" disabled>Stop</button>
+      <button id="reset-btn" disabled>Reset</button>
+    </div>
+  </div>
+  <script>
+    const roundInput = document.getElementById('round-duration');
+    const restInput = document.getElementById('rest-duration');
+    const roundsInput = document.getElementById('rounds');
+    const timerEl = document.getElementById('timer');
+    const roundInfoEl = document.getElementById('round-info');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    let schedule = [];
+    let stageIndex = 0;
+    let timeLeft = 0;
+    let timerInterval = null;
+
+    function formatTime(sec) {
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function playBeep() {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.frequency.value = 440;
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1);
+      setTimeout(() => o.stop(), 1000);
+    }
+
+    function updateDisplay() {
+      timerEl.textContent = formatTime(timeLeft);
+      const totalRounds = parseInt(roundsInput.value, 10);
+      const currentRound = Math.floor(stageIndex / 2) + 1;
+      if (schedule[stageIndex]?.type === 'round') {
+        roundInfoEl.textContent = `Round ${currentRound} of ${totalRounds}`;
+      } else {
+        roundInfoEl.textContent = 'Rest';
+      }
+      document.body.style.backgroundColor = schedule[stageIndex]?.type === 'round' ? '#f44336' : '#2196f3';
+    }
+
+    function nextStage() {
+      playBeep();
+      stageIndex++;
+      if (stageIndex >= schedule.length) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        startBtn.disabled = true;
+        stopBtn.disabled = true;
+        resetBtn.disabled = false;
+        roundInfoEl.textContent = 'Complete!';
+        document.body.style.backgroundColor = '#4caf50';
+        return;
+      }
+      timeLeft = schedule[stageIndex].duration;
+      updateDisplay();
+    }
+
+    function startTimer() {
+      if (!timerInterval) {
+        if (stageIndex === 0 && timeLeft === 0) {
+          const roundSec = parseInt(roundInput.value, 10) * 60;
+          const restSec = parseInt(restInput.value, 10) * 60;
+          const rounds = parseInt(roundsInput.value, 10);
+          schedule = [];
+          for (let i = 0; i < rounds; i++) {
+            schedule.push({ type: 'round', duration: roundSec });
+            if (i < rounds - 1) schedule.push({ type: 'rest', duration: restSec });
+          }
+          timeLeft = schedule[0].duration;
+        }
+        updateDisplay();
+        timerInterval = setInterval(() => {
+          timeLeft--;
+          if (timeLeft < 0) nextStage(); else updateDisplay();
+        }, 1000);
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        resetBtn.disabled = true;
+        roundInput.disabled = true;
+        restInput.disabled = true;
+        roundsInput.disabled = true;
+      }
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        resetBtn.disabled = false;
+      }
+    }
+
+    function resetTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      schedule = [];
+      stageIndex = 0;
+      timeLeft = 0;
+      const initialSec = parseInt(roundInput.value, 10) * 60;
+      timerEl.textContent = formatTime(initialSec);
+      roundInfoEl.textContent = 'Ready';
+      document.body.style.backgroundColor = '';
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      resetBtn.disabled = true;
+      roundInput.disabled = false;
+      restInput.disabled = false;
+      roundsInput.disabled = false;
+    }
+
+    startBtn.addEventListener('click', startTimer);
+    stopBtn.addEventListener('click', stopTimer);
+    resetBtn.addEventListener('click', resetTimer);
+
+    resetTimer();
+  </script>
+</body>
+</html>
